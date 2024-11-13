@@ -24,7 +24,63 @@ for i in range(num_leds):
     np.write()  # Envoie les données pour éteindre toutes les LEDs
     
 
+def ledPrintTest(x,y):
+    if y%2 == 0 or y == 0:
+        res=(y*8+x)
+    else:
+        res=(y*8+7-x)
+    np[res] = (5,5,5)
+    np.write()
+    time.sleep(5)
+    np[res] = (0,0,0)
+    np.write()
+    
+def coordsCalc(x,y):
+    print("coordsCalc")
+    if y%2 == 0 or y == 0:
+        res=(y*8+x)
+    else:
+        res=(y*8+7-x)
+    return res
 
+def calcRow(rowId):
+    print("calcRow")
+    listCL=[]
+    for i in range(0,8):
+        listCL.append(coordsCalc(i,rowId))
+    return listCL
+
+def calcCol(colId):
+    print("calcCol")
+    listCL=[]
+    for i in range(0,8):
+        listCL.append(coordsCalc(colId,i))
+    return listCL
+
+
+def colAndLinePrint():
+    print("colAndLinePrint")
+    for i in range(0,8):
+        columnList = calcCol(i)
+        for j in columnList:
+            np[j] = (5,5,5)
+            np.write()
+        time.sleep(0.1)
+        for j in columnList:
+            np[j] = (0,0,0)
+            np.write()
+            
+    for i in range(0,8):
+        rowList = calcRow(i)
+        for j in rowList:
+            np[j] = (5,5,5)
+            np.write()
+        time.sleep(0.1)
+        for j in rowList:
+            np[j] = (0,0,0)
+            np.write()
+
+colAndLinePrint()
 
 class apple:
     def __init__(self):
