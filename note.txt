@@ -9,31 +9,22 @@
 
       0   1   2   3   4   5   6   7  
 
+y*8+x = coordonnée pour y pair ou égal à 0
+y*8+7-x = coordonnée pour y impair
 
-x = 5 / y = 4 / 37
+--------------------------------------------------------------------
 
-5*8-4+1 = 37 soit ->   x*8+1-y
+      - Notes Snake -
 
-4*8+5 = 37 soit ->   y*8+x
+Une case verte apparait
+Elle peut se déplacer dans les 4 directions
 
+Si elle se met sur une case rouge, alors :
+  Une nouvelle case apparait derriere la case
+  Elle suit la case
 
-x = 5 / y = 5 / 42
+Si elle se met elle meme sur une case verte : 
+  Fin du jeu
 
-on a 
-5*8+7-5 = 42  
-
-
-
-x = 3 / y = 2 / 19
-
-2*8+3 = 19 soit ->   y*8+x
-
-
-x = 3 / y = 3 / 28
-
-3*8+7-3 soit ->   x*8+7-y
-
-
-x = 3 / y = 5 / 44
-
-3*8+7-3 soit ->   y*8+7-x
+Si elle va dans une paroit :
+  Fin du jeu
