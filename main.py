@@ -5,28 +5,25 @@ import random
 from math import sqrt
 
 
-# Configuration de la broche et du nombre de LEDs
-pin = machine.Pin(13)  # GPIO 13 comme broche de données
-num_leds = 64  # Nombre total de LEDs de la matrice (par exemple pour 8x8)
+pin = machine.Pin(13) 
+num_leds = 64
 ledsLen = 64
 
-# Initialisation de la matrice de LEDs
+
 np = neopixel.NeoPixel(pin, num_leds)
 
-# Éteindre toutes les LEDs au démarrage
+
 
 num_leds=64
 
-for i in range(num_leds):
-    np[i] = (0, 10, 10)
-    np.write()  # Envoie les données pour éteindre toutes les LEDs
-    time.sleep(0.01)
-    np[i] = (0, 0, 0)
-    np.write()  # Envoie les données pour éteindre toutes les LEDs
-    
 
 
-
+goPrint = [
+    [1,6],[2,6],[5,6],[6,6],
+    [0,5],[4,5],[7,5],
+    [0,4],[2,4],[4,4],[7,4],
+    [0,3],[2,3],[4,3],[7,3],
+    [1,2],[2,2],[5,2],[6,2]]
 
 
 
@@ -94,15 +91,13 @@ def turnOffAll():
 def scorePrint(score):
     turnOffAll()
 
-scoreSide = {
-    "a" : [3,0],
-    "a" : [3,0],
-    "a" : [3,0],
-    "a" : [3,0],
-    "a" : [3,0],
-    "a" : [3,0],
-    "a" : [3,0]
-}
+
+for e in goPrint:
+    np[coordsCalc(e[0],e[1])] = (10,10,10)
+    np.write()
+time.sleep(3)
+turnOffAll()
+
 
 class apple:
     def __init__(self):
@@ -137,8 +132,8 @@ dontPop = False
 
 snakeMoving=True
 
-con = [[0,3],[0,2],[0,1],[0,0]]
-cod = [[0,4],[0,3],[0,2],[0,1]]
+con = [[0,3],[0,2],[0,1]]
+cod = [[0,4],[0,3],[0,2]]
 
 for element in con:
     np[coordsCalc(element[0],element[1])] = (0,0,10)
@@ -165,16 +160,24 @@ while snakeMoving == True:
         direction = "left"
 
     if direction == "up" and npy < 7:
-        npy +=1
+        npy += 1
+    elif direction == "up":
+        npy = 0
 
     if direction == "down" and npy > 0:
-        npy -=1
+        npy -= 1
+    elif direction == "down":
+        npy = 7
 
     if direction == "right" and npx < 7:
-        npx +=1
+        npx += 1
+    elif direction == "right":
+        npx = 0
 
     if direction == "left" and npx > 0:
-        npx -=1
+        npx -= 1
+    elif direction == "left":
+        npx = 7
 
     con.insert(0,[npx,npy])
     np[coordsCalc(con[len(con)-1][0],con[len(con)-1][1])] = (0,0,0)
@@ -188,8 +191,6 @@ while snakeMoving == True:
     
     elif np[npCo] == (0,10,0):
         dontPop = True
-
-    print(np[npCo])
 
     if snakeMoving != False :
         np[npCo] = (0,0,10)  
@@ -230,9 +231,10 @@ while snakeMoving == True:
         np[npCo] = (0,0,0)
         np.write()
         print("ARRET")
-    time.sleep(0.4)
+
+    time.sleep(0.3)
 
 
 for j in range(0,64):
     np[j] = (0,0,0)
-np.write()
+np.write() 
