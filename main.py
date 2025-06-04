@@ -1,240 +1,222 @@
+# main.py
+import utime
 import machine
-import neopixel
-import time
-import random
-from math import sqrt
 
+from led_matrix import LedMatrix
+from joystick import Joystick
+from snake import Snake, Food
 
-pin = machine.Pin(13) 
-num_leds = 64
-ledsLen = 64
+class SnakeGame:
+    """
+    Jeu du Snake sur une matrice 8×8, contrôlé par :
+      - Joystick analogique (GPIO0, GPIO4, GPIO11)
+      - Potentiomètre pour la vitesse (GPIO1)
+      - Affichage du score sur la matrice après fin de partie
+      - DATA WS2812B → GPIO5
+    """
 
-
-np = neopixel.NeoPixel(pin, num_leds)
-
-
-
-num_leds=64
-
-
-
-goPrint = [
-    [1,6],[2,6],[5,6],[6,6],
-    [0,5],[4,5],[7,5],
-    [0,4],[2,4],[4,4],[7,4],
-    [0,3],[2,3],[4,3],[7,3],
-    [1,2],[2,2],[5,2],[6,2]]
-
-
-
-
-
-def ledPrintTest(x,y):
-    if y%2 == 0 or y == 0:
-        res=(y*8+x)
-    else:
-        res=(y*8+7-x)
-    np[res] = (5,5,5)
-    np.write()
-    time.sleep(5)
-    np[res] = (0,0,0)
-    np.write()
-    
-def coordsCalc(x,y):
-    if y%2 == 0 or y == 0:
-        res=(y*8+x)
-    else:
-        res=(y*8+7-x)
-    return res
-
-def calcRow(rowId):
-    listCL=[]
-    for i in range(0,8):
-        listCL.append(coordsCalc(i,rowId))
-    return listCL
-
-def calcCol(colId):
-    listCL=[]
-    for i in range(0,8):
-        listCL.append(coordsCalc(colId,i))
-    return listCL
-
-
-def colAndLinePrint():
-    for i in range(0,8):
-        columnList = calcCol(i)
-        for j in columnList:
-            np[j] = (10,0,0)
-            np.write()
-        time.sleep(0.1)
-        for j in columnList:
-            np[j] = (0,0,0)
-            np.write()
-            
-    for i in range(0,8):
-        rowList = calcRow(i)
-        for j in rowList:
-            np[j] = (10,0,0)
-            np.write()
-        time.sleep(0.1)
-        for j in rowList:
-            np[j] = (0,0,0)
-            np.write()
-
-#colAndLinePrint()
-
-def turnOffAll():
-    for i in range(0,64):
-        np[i]=(0,0,0)
-    np.write()
-
-def scorePrint(score):
-    turnOffAll()
-
-
-for e in goPrint:
-    np[coordsCalc(e[0],e[1])] = (10,10,10)
-    np.write()
-time.sleep(3)
-turnOffAll()
-
-
-class apple:
     def __init__(self):
-        self.color = (10,0,0)
-        self.x = 0
-        self.y = 0
-        
-        
-    def generate (self):
-        self.x = random.randint(0,7)
-        self.y = random.randint(0,7)
-        
-pomme = apple()
-pomme.generate()
+        # --- BROCHES ---
+        PIN_LED_MATRIX = 5    # WS2812B DATA sur GPIO5
+        PIN_POT        = 1    # Potentiomètre sur GPIO1 (ADC1_CH1)
 
+        # Initialisation de la matrice
+        self.matrix = LedMatrix(pin_data=PIN_LED_MATRIX)
 
+        # Initialisation du potentiomètre (ADC1_CH1 = GPIO1)
+        self.adc_pot = machine.ADC(machine.Pin(PIN_POT))
+        self.adc_pot.atten(machine.ADC.ATTN_11DB)  # plage 0–3.3V → 0–4095
 
-butUp = machine.Pin(4, machine.Pin.IN, machine.Pin.PULL_UP)
-butDown = machine.Pin(5, machine.Pin.IN, machine.Pin.PULL_UP)
-butLeft = machine.Pin(7, machine.Pin.IN, machine.Pin.PULL_UP)
-butRight = machine.Pin(6, machine.Pin.IN, machine.Pin.PULL_UP)
-butSTOP = machine.Pin(1, machine.Pin.IN, machine.Pin.PULL_UP)
+        # Initialisation du joystick avec calibration automatique
+        self.joystick = Joystick(threshold=300, samples=10)
 
-npx = 0
-npy = 3
-npCo = coordsCalc(npx,npy)
-np[npCo] = (0,0,10)
-np.write()
-direction = "up"
+        # Initialisation du serpent et de la nourriture
+        self.snake = Snake(grid_size=8)
+        self.food  = Food(grid_size=8)
+        if self.food.position in self.snake.body:
+            self.food.respawn(self.snake.body)
 
-dontPop = False
+        self.score     = 0
+        self.game_over = False
 
-snakeMoving=True
+    def _show_menu(self):
+        """
+        Affiche un menu avant la partie :
+         - Clignotement de la matrice
+         - Attente de l'appui sur SW du joystick
+        """
+        print("=== SNAKE 8×8 ===")
+        print("Appuyez sur SW pour démarrer")
+        for _ in range(3):
+            # Allumer tout en vert très faible
+            for x in range(8):
+                for y in range(8):
+                    self.matrix.set_pixel(x, y, (0, 5, 0))
+            self.matrix.show()
+            utime.sleep_ms(200)
+            self.matrix.clear()
+            self.matrix.show()
+            utime.sleep_ms(200)
 
-con = [[0,3],[0,2],[0,1]]
-cod = [[0,4],[0,3],[0,2]]
+        # Attendre que SW soit relâché puis appuyé
+        while self.joystick.is_button_pressed():
+            utime.sleep_ms(50)
+        while not self.joystick.is_button_pressed():
+            utime.sleep_ms(50)
+        # Clear avant démarrage
+        self.matrix.clear()
+        self.matrix.show()
+        # Attendre le relâchement pour démarrer
+        while self.joystick.is_button_pressed():
+            utime.sleep_ms(50)
+        print("Début de la partie !")
 
-for element in con:
-    np[coordsCalc(element[0],element[1])] = (0,0,10)
-    np.write()
+    def _update_direction(self):
+        """
+        Lit le joystick pour changer la direction immédiatement.
+        """
+        direction = self.joystick.get_direction()
+        if direction != 'NEUTRAL':
+            self.snake.set_direction(direction)
 
-pomme.generate()
-pommeCo = coordsCalc(pomme.x,pomme.y)
-while np[pommeCo] == (0,0,10):
-    pomme.generate()
-    pommeCo = coordsCalc(pomme.x,pomme.y)
-np[pommeCo]=(0,10,0)
-np.write()
+    def _check_eat(self):
+        """
+        Si la tête du serpent touche la nourriture, grandir et respawn.
+        """
+        if self.snake.head_pos() == self.food.position:
+            self.snake.eat()
+            self.score += 1
+            self.food.respawn(self.snake.body)
 
-appleEatAmout = 0
+    def _draw(self):
+        """
+        Efface la matrice, dessine la nourriture et le serpent, puis met à jour.
+        """
+        self.matrix.clear()
+        # Food en rouge très faible
+        if self.food.position is not None:
+            self.matrix.draw_food(self.food.position, color=(5, 0, 0))
+        # Serpent en vert très faible
+        self.matrix.draw_snake(self.snake.body, color=(0, 5, 0))
+        self.matrix.show()
 
-while snakeMoving == True:
-    if not butUp.value() and direction != "down":
-        direction = "up"
-    if not butDown.value() and direction != "up":
-        direction = "down"
-    if not butRight.value() and direction != "left":
-        direction = "right"
-    if not butLeft.value() and direction != "right":
-        direction = "left"
+    def _display_score_on_matrix(self):
+        """
+        Après la fin de la partie, faire défiler le score sur la matrice 8×8,
+        chiffre par chiffre, en utilisant des patterns 5×7 pour chaque chiffre.
+        """
+        # Cartes 5×7 pour les chiffres 0–9 (chaque valeur est une colonne 7 bits, MSB non utilisé)
+        digits = {
+            '0': [0x7E, 0x81, 0x81, 0x81, 0x7E],
+            '1': [0x00, 0x82, 0xFF, 0x80, 0x00],
+            '2': [0xE2, 0x91, 0x91, 0x91, 0x8E],
+            '3': [0x42, 0x81, 0x89, 0x89, 0x76],
+            '4': [0x18, 0x14, 0x12, 0xFF, 0x10],
+            '5': [0x4F, 0x89, 0x89, 0x89, 0x71],
+            '6': [0x7E, 0x89, 0x89, 0x89, 0x72],
+            '7': [0x01, 0xE1, 0x11, 0x09, 0x07],
+            '8': [0x76, 0x89, 0x89, 0x89, 0x76],
+            '9': [0x4E, 0x91, 0x91, 0x91, 0x7E],
+        }
 
-    if direction == "up" and npy < 7:
-        npy += 1
-    elif direction == "up":
-        npy = 0
+        # Convertir score en chaîne puis en liste de patterns
+        s = str(self.score)
+        patterns = [digits[c] for c in s]
 
-    if direction == "down" and npy > 0:
-        npy -= 1
-    elif direction == "down":
-        npy = 7
+        # Construire le flux de colonnes : chaque chiffre → 5 colonnes + 1 colonne vide
+        stream = []
+        for patt in patterns:
+            stream += patt[:]
+            stream.append(0x00)  # espace entre chiffres
 
-    if direction == "right" and npx < 7:
-        npx += 1
-    elif direction == "right":
-        npx = 0
+        # Ajouter 8 colonnes vides pour voir le dernier chiffre complètement
+        stream += [0x00] * 8
 
-    if direction == "left" and npx > 0:
-        npx -= 1
-    elif direction == "left":
-        npx = 7
+        # Défilement : pour chaque position de fenêtre de largeur 8 colonnes
+        for offset in range(len(stream) - 7):
+            self.matrix.clear()
+            window = stream[offset:offset + 8]
+            for x in range(8):
+                col = window[x]
+                for y in range(7):
+                    if (col >> (6 - y)) & 0x01:
+                        # Allumer pixel (x, y+1) pour centrer verticalement
+                        self.matrix.set_pixel(x, y + 1, (0, 5, 0))
+            self.matrix.show()
+            utime.sleep_ms(200)
 
-    con.insert(0,[npx,npy])
-    np[coordsCalc(con[len(con)-1][0],con[len(con)-1][1])] = (0,0,0)
-    
+        # Laisser le score figé 3 s, puis éteindre
+        utime.sleep_ms(3000)
+        self.matrix.clear()
+        self.matrix.show()
 
+    def run(self):
+        """
+        Boucle principale du jeu :
+          1) afficher le menu
+          2) lire joystick pour orientation
+          3) move serpent (collision interne → fin)
+          4) check_eat()
+          5) draw matrice
+          6) si SW appuyé → fin
+          7) lire pot → calcul délai → utime.sleep_ms(délai)
+        """
+        self._show_menu()
 
-    npCo=coordsCalc(npx,npy)
+        while not self.game_over:
+            # 2) orientation du serpent
+            self._update_direction()
 
-    if np[npCo] == (0,0,10):
-        snakeMoving = False
-    
-    elif np[npCo] == (0,10,0):
-        dontPop = True
+            # 3) déplacement du serpent
+            alive = self.snake.move()
+            if not alive:
+                self.game_over = True
+                break
 
-    if snakeMoving != False :
-        np[npCo] = (0,0,10)  
+            # 4) vérification “manger”
+            self._check_eat()
 
-    if dontPop == True:
-        dontPop = False
-        pomme.generate()
-        pommeCo = coordsCalc(pomme.x,pomme.y)
-        while np[pommeCo] == (0,0,10):
-            pomme.generate()
-            pommeCo = coordsCalc(pomme.x,pomme.y)
-        np[pommeCo]=(0,10,0)
+            # 5) dessin sur la matrice
+            self._draw()
 
-        appleEatAmout +=1
-        
-    else:
-        con.pop()
-    if snakeMoving == False:
-        for k in range (0,3):
-            for i in range(0,64):
-                np[i] = (2,0,0)
-            np.write()
-            time.sleep(0.1)
+            # 6) si SW appuyé → fin de partie
+            if self.joystick.is_button_pressed():
+                self.game_over = True
+                break
 
-            for j in range(0,64):
-                np[j] = (0,0,0)
-            np.write()
-            time.sleep(0.1)
-        scorePrint(appleEatAmout)
+            # 7) ajuster délai via potentiomètre
+            raw = self.adc_pot.read_u16() >> 4  # 0–4095
+            delay_ms = 50 + (350 * (4095 - raw) // 4095)
+            utime.sleep_ms(delay_ms)
 
-    np.write()     
+        # Animation “Game Over” (rouge très faible)
+        for _ in range(3):
+            self.matrix.clear()
+            self.matrix.show()
+            utime.sleep_ms(200)
+            for x in range(8):
+                for y in range(8):
+                    self.matrix.set_pixel(x, y, (3, 0, 0))
+            self.matrix.show()
+            utime.sleep_ms(200)
+        self.matrix.clear()
+        self.matrix.show()
 
+        # Afficher le score sur la matrice
+        self._display_score_on_matrix()
 
+if __name__ == "__main__":
+    while True:
+        game = SnakeGame()
+        game.run()
+        print("Partie terminée ! Affichage du score…")
+        print("Appuyez sur SW pour une nouvelle partie.")
+        # Attendre relâchement puis nouvel appui SW
+        while game.joystick.is_button_pressed():
+            utime.sleep_ms(50)
+        while not game.joystick.is_button_pressed():
+            utime.sleep_ms(50)
+        while game.joystick.is_button_pressed():
+            utime.sleep_ms(50)
+        # Redémarre automatiquement une nouvelle partie
 
-
-    if not butSTOP.value():
-        snakeMoving = False
-        np[npCo] = (0,0,0)
-        np.write()
-        print("ARRET")
-
-    time.sleep(0.3)
-
-
-for j in range(0,64):
-    np[j] = (0,0,0)
-np.write() 
